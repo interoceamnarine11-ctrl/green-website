@@ -1,58 +1,41 @@
 # Cloudflare Deployment Guide
 
-## What Caused the Error
+## What Caused the Error in Your Log
 
+In your log:
 ```
-✘ [ERROR] Processing wrangler.toml configuration:
-    - The name 'ASSETS' is reserved in Pages projects. Please use a different name for your Assets binding.
+✘ [ERROR] A request to the Cloudflare API (/accounts/.../workers/scripts/green-website/versions) failed.
+  Invalid _redirects configuration:
+  Line 2: Infinite loop detected in this rule. This would cause a redirect to strip `.html` or `/index` and end up triggering this rule again. [code: 100324]
 ```
 
-### Why This Happened:
-In Cloudflare Pages, Cloudflare automatically injects and manages a reserved internal binding named `ASSETS` to serve your static files from `dist`. 
-
-When `wrangler.toml` had:
-```toml
-binding = "ASSETS" # <-- Cloudflare Pages reserves this identifier!
-```
-Wrangler stopped because custom bindings in a Pages project cannot be named `ASSETS`.
-
----
-
-## What We Fixed in the Code
-
-1. **Removed `binding = "ASSETS"` from `wrangler.toml`**:
-   `wrangler.toml` is now streamlined for Pages:
+### Explanation:
+1. **The `_redirects` conflict**:
+   When using Cloudflare Workers Static Assets with:
    ```toml
-   name = "green-bulk-maritime"
-   pages_build_output_dir = "dist"
-   compatibility_date = "2024-09-23"
-   compatibility_flags = ["nodejs_compat"]
-
    [assets]
    directory = "./dist"
-   html_handling = "auto-trailing-slash"
    not_found_handling = "single-page-application"
    ```
-
-2. **Removed `worker.js`**:
-   Cloudflare Pages serves the compiled Vite assets directly from `dist/` with edge caching and SPA fallback without needing a custom worker script.
-
-3. **Updated `package.json` deploy command**:
-   ```json
-   "deploy": "wrangler pages deploy dist"
-   ```
+   Cloudflare automatically routes all pages to `index.html`. Having a `_redirects` file with `/* /index.html 200` caused Cloudflare's API validator to detect an infinite loop (since `/index.html` matches `/*`).
+2. **Worker Name Mismatch**:
+   Cloudflare CI expects the project name to be `"green-website"`.
 
 ---
 
-## Action Needed in Your Cloudflare Dashboard
+## What We Fixed
 
-In your Cloudflare Dashboard (**Build settings**):
+1. **Deleted `_redirects`**:
+   Cloudflare handles SPA routing automatically using `not_found_handling = "single-page-application"` in `wrangler.toml`.
+2. **Updated Worker Name in `wrangler.toml`**:
+   Set `name = "green-website"` to match your Cloudflare project name.
 
-1. **Deploy command**:
-   Change it to:
-   ```bash
-   npx wrangler pages deploy dist
-   ```
-   *(Or simply **clear/delete** the text in the "Deploy command" box, because Cloudflare Pages automatically deploys the output directory `dist` by default without needing a custom deploy command).*
+---
 
-2. **Push the updated files** (`wrangler.toml`, `package.json`) to your GitHub repository.
+## Deploy Settings in Cloudflare
+
+Your current build and deploy settings are now aligned:
+- **Build command**: `npm run build`
+- **Deploy command**: `npx wrangler deploy` (or `npx wrangler deploy --assets=./dist`)
+
+Once you push these changes (`wrangler.toml` updated and `_redirects` removed), Cloudflare will deploy successfully.
