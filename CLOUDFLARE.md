@@ -1,65 +1,61 @@
 # Cloudflare Deployment Guide
 
-This application is configured for both **Cloudflare Workers (Static Assets)** and **Cloudflare Pages**.
+This project is configured to run smoothly on **both** Cloudflare deployment systems:
+1. **Cloudflare Workers (with Static Assets)** via `wrangler deploy`
+2. **Cloudflare Pages** via Git integration or `wrangler pages deploy dist`
 
 ---
 
-## What was resolved from the build log
+## Explanation of the Error in Your Log
 
-Your build log showed:
+In your log:
 ```
-Executing user deploy command: npx wrangler deploy
-▲ [WARNING] It seems that you have run `wrangler deploy` on a Pages project...
+2026-09-21T11:55:27.963Z Executing user deploy command: npx wrangler deploy
+...
 ✘ [ERROR] Missing entry-point to Worker script or to assets directory
 ```
 
-**Root Cause:**
-When deploying with `npx wrangler deploy` (Wrangler v4 Workers with Static Assets), Wrangler requires the `[assets]` block in `wrangler.toml` specifying the directory where Vite generated files (`./dist`).
-
-**Resolution:**
-We added the `[assets]` block to `wrangler.toml`:
-```toml
-[assets]
-directory = "./dist"
-html_handling = "auto-trailing-slash"
-not_found_handling = "single-page-application"
-```
-
-Now `npx wrangler deploy` knows exactly where `./dist` is and deploys all static assets with automatic Single-Page Application (SPA) routing.
+When Cloudflare executes `npx wrangler deploy`, Wrangler requires an entry-point file (`main = "..."`) or a defined assets directory (`[assets] directory = "..."`).
 
 ---
 
-## Deployment Options
+## What We Configured to Fix This
 
-### Option 1: Cloudflare Dashboard CI (Git Connected)
+1. **`worker.js` Entry Point**:
+   Added a lightweight, high-performance Worker script that binds to `env.ASSETS` and automatically serves all files from `dist/` with SPA routing (fallback to `index.html` for deep links and sub-routes).
 
-Whenever your repository builds on Cloudflare:
+2. **`wrangler.toml`**:
+   ```toml
+   name = "green-bulk-maritime"
+   main = "worker.js"
+   compatibility_date = "2024-09-23"
+   compatibility_flags = ["nodejs_compat"]
+
+   pages_build_output_dir = "dist"
+
+   [assets]
+   directory = "./dist"
+   binding = "ASSETS"
+   html_handling = "auto-trailing-slash"
+   not_found_handling = "single-page-application"
+   ```
+
+3. **`vite.config.ts`**:
+   Updated to native Node ES modules URL pathing (`fileURLToPath`), removing the `__dirname` warning.
+
+---
+
+## Cloudflare Dashboard Settings
+
+In your Cloudflare Dashboard (**Workers & Pages**):
+
+### If using **Cloudflare Pages** (Recommended):
+- **Framework Preset**: `Vite` (or None)
 - **Build command**: `npm run build`
-- **Deploy command**: `npx wrangler deploy` (or automatic Pages deploy)
-- **Output / assets directory**: `dist`
-- **Node version**: Automatically set to `20` via `.node-version`
+- **Build output directory**: `dist`
+- **Deploy command**: *(Leave blank or set to `wrangler pages deploy dist`)*
 
-### Option 2: Terminal Deployment
-
-**For Cloudflare Workers (Static Assets):**
-```bash
-npm run build
-npx wrangler deploy
-```
-*(or simply `npm run deploy`)*
-
-**For Cloudflare Pages:**
-```bash
-npm run build
-npx wrangler pages deploy dist --project-name=green-bulk-maritime
-```
-*(or `npm run deploy:pages`)*
-
----
-
-## Features Included in This Project
-
-- **`wrangler.toml`**: Configured with `[assets] directory = "./dist"` and `not_found_handling = "single-page-application"`.
-- **`public/_redirects`**: Copied to `dist/_redirects` for Cloudflare Pages SPA rewrite (`/* /index.html 200`).
-- **`public/_headers`**: Copied to `dist/_headers` for edge security headers (`X-Frame-Options`, `X-Content-Type-Options`) and immutable caching on `/assets/*`.
-- **`vite.config.ts`**: Clean native ES module path resolution without legacy `__dirname` warnings.
+### If using **Cloudflare Workers**:
+- **Build command**: `npm run build`
+- **Deploy command**: `npx wrangler deploy` (or `npm run deploy`)
+- The `worker.js` and `[assets]` directory in `wrangler.toml` will handle everything automatically.
