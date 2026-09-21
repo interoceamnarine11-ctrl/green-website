@@ -1,0 +1,8 @@
+{
+  "name": "Green Bulk Maritime Ltd.",
+  "description": "Premier international procurement, government tenders, bulk project supplies, and maritime logistics partner across the UAE, Africa, and Middle East.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
