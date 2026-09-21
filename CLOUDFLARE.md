@@ -1,45 +1,65 @@
-# Cloudflare Pages Deployment Guide
+# Cloudflare Deployment Guide
 
-This application is fully optimized for **Cloudflare Pages**.
-
----
-
-## Option 1: Direct Cloudflare Dashboard (GitHub / GitLab Integration)
-
-1. Log into your [Cloudflare Dashboard](https://dash.cloudflare.com/) and go to **Workers & Pages** > **Create application** > **Pages** > **Connect to Git**.
-2. Select your repository.
-3. In the **Set up builds and deployments** step, configure:
-   - **Framework preset**: `Vite` (or `None`)
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-   - **Root directory**: `/` (default)
-4. (Optional) Under **Environment variables**, ensure `NODE_VERSION` is `20` (already set via `.node-version`).
-5. Click **Save and Deploy**.
+This application is configured for both **Cloudflare Workers (Static Assets)** and **Cloudflare Pages**.
 
 ---
 
-## Option 2: Deploy via Cloudflare Wrangler CLI
+## What was resolved from the build log
 
-You can deploy directly from your local terminal using `wrangler`:
+Your build log showed:
+```
+Executing user deploy command: npx wrangler deploy
+▲ [WARNING] It seems that you have run `wrangler deploy` on a Pages project...
+✘ [ERROR] Missing entry-point to Worker script or to assets directory
+```
 
+**Root Cause:**
+When deploying with `npx wrangler deploy` (Wrangler v4 Workers with Static Assets), Wrangler requires the `[assets]` block in `wrangler.toml` specifying the directory where Vite generated files (`./dist`).
+
+**Resolution:**
+We added the `[assets]` block to `wrangler.toml`:
+```toml
+[assets]
+directory = "./dist"
+html_handling = "auto-trailing-slash"
+not_found_handling = "single-page-application"
+```
+
+Now `npx wrangler deploy` knows exactly where `./dist` is and deploys all static assets with automatic Single-Page Application (SPA) routing.
+
+---
+
+## Deployment Options
+
+### Option 1: Cloudflare Dashboard CI (Git Connected)
+
+Whenever your repository builds on Cloudflare:
+- **Build command**: `npm run build`
+- **Deploy command**: `npx wrangler deploy` (or automatic Pages deploy)
+- **Output / assets directory**: `dist`
+- **Node version**: Automatically set to `20` via `.node-version`
+
+### Option 2: Terminal Deployment
+
+**For Cloudflare Workers (Static Assets):**
 ```bash
-# 1. Build the production bundle
 npm run build
+npx wrangler deploy
+```
+*(or simply `npm run deploy`)*
 
-# 2. Deploy to Cloudflare Pages
+**For Cloudflare Pages:**
+```bash
+npm run build
 npx wrangler pages deploy dist --project-name=green-bulk-maritime
 ```
-
-Or using the npm shortcut:
-```bash
-npm run deploy
-```
+*(or `npm run deploy:pages`)*
 
 ---
 
-## Pre-Configured Cloudflare Features Included:
+## Features Included in This Project
 
-- **`public/_redirects`**: Automatically copied to `dist/_redirects` to handle Single Page Application (SPA) routing, deep links, and client-side URL reloads without 404 errors.
-- **`public/_headers`**: Provides edge security headers (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) and 1-year immutable caching for all static hashed assets in `/assets/*`.
-- **`wrangler.toml`**: Configures the project output directory (`dist`) and Node.js compatibility flags.
-- **`.node-version` & `.nvmrc`**: Pins Node.js 20 runtime for Cloudflare Pages build runners.
+- **`wrangler.toml`**: Configured with `[assets] directory = "./dist"` and `not_found_handling = "single-page-application"`.
+- **`public/_redirects`**: Copied to `dist/_redirects` for Cloudflare Pages SPA rewrite (`/* /index.html 200`).
+- **`public/_headers`**: Copied to `dist/_headers` for edge security headers (`X-Frame-Options`, `X-Content-Type-Options`) and immutable caching on `/assets/*`.
+- **`vite.config.ts`**: Clean native ES module path resolution without legacy `__dirname` warnings.
